@@ -2,7 +2,6 @@ import pigpio
 from threading import Timer
 from time import sleep
 from vpython import *
-from math import ceil
 
 class RPiLesson12HW:
     MAX_DUTY = 255.0
@@ -67,7 +66,31 @@ if __name__ == "__main__":
         )
         homework.run()
         
-        mySphere = sphere(color = color.white, radius = 1)
+        mySphere = sphere(
+            radius = 1,
+            pos = vector(0, 2, 0),
+            axis = vector(0, 1, 0)
+        )
+        myCylinder = cylinder(
+            radius = 1,
+            length = 2,
+            axis = vector(0, 1, 0)
+        )
+        myCylinderBase = cylinder(
+            radius = 1.15,
+            length = .2,
+            axis = vector(0, 1, 0)
+        )
+        legOne = box(
+            size = vector(.2, 6, .2),
+            color = vector(.2, .2, .2),
+            pos = vector(-.50, -1, 0)
+        )
+        legTwo = box(
+            size = vector(.2, 7, .2),
+            color = vector(.2, .2, .2),
+            pos = vector(.50, -1, 0)
+        )
         #rate(100)
         while True:
             mySphere.color = vector(
@@ -75,6 +98,8 @@ if __name__ == "__main__":
                 homework.buttonPushes[1]/10,
                 homework.buttonPushes[2]/10            
             )
+            myCylinder.color = mySphere.color
+            myCylinderBase.color = mySphere.color
             print(f"R: {homework.ledValues[0]:03} - {homework.buttonPushes[0]/10} \tG: {homework.ledValues[1]:03} - {homework.buttonPushes[1]/10} \tB: {homework.ledValues[2]:03} - {homework.buttonPushes[2]/10}", end = "\r")
             sleep(.1)
     except KeyboardInterrupt:
