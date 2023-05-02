@@ -1,7 +1,6 @@
 import pigpio
 import ADC0834
 from threading import Timer
-from time import sleep
 
 def preparePWMLed(pin: int) -> int:
     pi.set_PWM_dutycycle(pin, 0)
@@ -13,7 +12,7 @@ ADC0834.setup()
 pi = pigpio.pi()
 leds = [preparePWMLed(n) for n in [16, 20, 21]]
 adcResults = [0 for led in leds]
-# timer = None
+timer = None
 
 def main():
     global timer, adcResults
@@ -21,14 +20,14 @@ def main():
         adcResults[index] = ADC0834.getResult(index)
         pi.set_PWM_dutycycle(led, adcResults[index])
     print(f"R: {adcResults[0]:03} G: {adcResults[1]:03} B: {adcResults[2]:03} ", end = "\r")
-    sleep(.01)
-#     timer = Timer(.01, main)
-#     timer.start()
+    timer = Timer(.01, main)
+    timer.start()
 
 try:
+    main()
     while True:
-        main()
+        pass
 except KeyboardInterrupt:
-#     timer.cancel()
+    timer.cancel()
     pi.stop()
     print("\nSee ya later, RPi!\n")
