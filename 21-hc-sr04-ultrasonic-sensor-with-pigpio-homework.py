@@ -9,13 +9,12 @@
 # DC ≈ 1 -> 2% -> 0
 # DC ≈ 10 -> 15% -> 180
 
-import RPi.GPIO as GPIO
 import ADC0834
+import sonar_trigger_echo
+from RepeatTimer import RepeatTimer
 import pigpio
-from threading import Thread
-from time import sleep
+from time import sleep, time
 
-GPIO.setmode(GPIO.BCM)
 ADC0834.setup()
 servoPin = 26
 pi = pigpio.pi()
@@ -31,6 +30,12 @@ buttonStates = [0, 0]
 buttonPin = 21
 pi.set_mode(buttonPin, pigpio.INPUT)
 pi.set_pull_up_down(buttonPin, pigpio.PUD_UP)
+
+trigPin = 23
+echoPin = 24
+
+sonar = None
+thread = None
 
 def set_angle(new_angle):
     global angle
@@ -60,17 +65,29 @@ def lockPos() -> bool:
     
     return isPosLocked
 
-def main():
+def echoSensor():
+    print(f"{format(1/29.154 * sonar.read()/2, '.2f')} cm          ", end = "\r")
+    
+def servoStuff():
     global adcResult, isPosLocked
     if not lockPos():
         adcResult = ADC0834.getResult(0)
-    print(f"X: {adcResult:03} B: {buttonStates[0]} - {isPosLocked}", end = "\r")
+#     print(f"X: {adcResult:03} B: {buttonStates[0]} - {isPosLocked}", end = "\r")
     smooth_pos(adcResult)
 
 try:
     set_angle(int(255/2))
+    sonar = sonar_trigger_echo.ranger(pi, trigPin, echoPin)
+    
+    thread = RepeatTimer(.01, echoSensor)
+    thread.start()
+    sleep(.3)
+
     while True:
-        main()
+        servoStuff()
 except KeyboardInterrupt:
+    sonar.cancel()
+    thread.cancel()
     pi.stop()
     print("\nSee ya later, RPi!\n")
+
