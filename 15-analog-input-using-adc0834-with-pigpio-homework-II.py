@@ -5,14 +5,14 @@ from time import sleep
 
 ADC0834.setup()
 pi = pigpio.pi()
-ledPin = 21
+ledPin = 26
 pi.set_PWM_dutycycle(ledPin, 0)
 pi.set_PWM_frequency(ledPin, 1000)
-adcResults = [0, 0, 0]
+adcResult = 0
 timer = None
 
 def main():
-    global timer, adcResults
+    global timer, adcResult
     adcResult = ADC0834.getResult()
     pi.set_PWM_dutycycle(ledPin, adcResult)
     print(f"{adcResult:03}", end = "\r")
