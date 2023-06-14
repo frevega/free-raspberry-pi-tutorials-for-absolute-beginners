@@ -49,6 +49,7 @@ class Lesson25:
 
     def readPot(self):
         self.pi.set_PWM_dutycycle(self.LCDLedPin, ADC0834.getResult())
+#         print(ADC0834.getResult(),"", ADC0834.getResult(1), "       ", end = "\r")
     
     def readButton(self):
         self.buttonStates[0] = self.pi.read(self.buttonPin)
@@ -87,3 +88,4 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, TimeoutError) as e:
         print(e)
         lesson.cleanup()
+
