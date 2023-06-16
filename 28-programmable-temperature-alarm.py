@@ -84,7 +84,13 @@ class Lesson28:
     
     def writeProgramming(self):
         LCD1602.write(0, 0, "ALARM PROG MODE")
-        LCD1602.write(0, 1, f"TEMP >= {format(self.tempThreshold if self.isCelcius else self.tempThreshold * 9/5 + 32, '.1f')}{chr(223)}{'C' if self.isCelcius else 'F'}   ")
+        LCD1602.write(
+            0,
+            1,
+            f"TEMP >= " \
+            f"{format(self.tempThreshold if self.isCelcius else self.tempThreshold * 9/5 + 32, '.1f')}" \
+            f"{chr(223)}{'C' if self.isCelcius else 'F'}   "
+        )
     
     def writeTemperature(self):
         reading = [read for read in self.read if read["valid"] == True]
@@ -92,7 +98,12 @@ class Lesson28:
             LCD1602.write(0, 0, "Waiting for     ")
             LCD1602.write(0, 1, "Sensor data...  ")
         else:
-            LCD1602.write(0, 0, f"Temp {reading[0]['temp_c' if self.isCelcius else 'temp_f']}{chr(223)}{'C' if self.isCelcius else 'F'}       ")
+            LCD1602.write(
+                0,
+                0,
+                f"Temp {reading[0]['temp_c' if self.isCelcius else 'temp_f']}" \
+                f"{chr(223)}{'C' if self.isCelcius else 'F'}       "
+            )
             LCD1602.write(0, 1, f"Humidity {reading[0]['humidity']}%    ")
     
     def MAP(self, x, in_min, in_max, out_min, out_max):
@@ -117,7 +128,9 @@ class Lesson28:
         
     def checkTempThreshold(self):
         reading = [read for read in self.read if read["valid"] == True]
-        if len(reading) > 0 and self.tempThreshold <= float(reading[0]["temp_c"]):
+        if not self.isProgramming \
+            and len(reading) > 0 \
+            and self.tempThreshold <= float(reading[0]["temp_c"]):
             self.buzzer.start(50)
             for i in range(150, 2000):
                 self.buzzer.ChangeFrequency(i)
@@ -154,7 +167,7 @@ if __name__ == "__main__":
     try:
         lesson = Lesson28(
             pi = pigpio.pi(),
-            tempThreshold = 20,
+            tempThreshold = 25,
             LCDAddress = 0x27,
             LCDLedPin = 21,
             DHTPin = 19,
