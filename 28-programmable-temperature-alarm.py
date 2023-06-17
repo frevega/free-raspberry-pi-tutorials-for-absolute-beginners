@@ -130,7 +130,6 @@ class Lesson28:
         self.writeLCD()
         
     def checkTempThreshold(self):
-        print(GPIO.input(22), end = "\r")
         reading = [read for read in self.read if read["valid"] == True]
         shouldActivateAlarm = not self.isProgramming \
             and len(reading) > 0 \
