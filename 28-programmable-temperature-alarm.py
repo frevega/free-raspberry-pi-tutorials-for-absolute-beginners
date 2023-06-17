@@ -50,6 +50,7 @@ class Lesson28:
         # FLAGS
         self.isCelcius = True
         self.isProgramming = False
+        self.isAlarmActive = False
         
         # DATA
         self.tempThreshold = tempThreshold
@@ -101,8 +102,9 @@ class Lesson28:
             LCD1602.write(
                 0,
                 0,
-                f"Temp {reading[0]['temp_c' if self.isCelcius else 'temp_f']}" \
-                f"{chr(223)}{'C' if self.isCelcius else 'F'}       "
+                f"{'ALARM! ' if self.isAlarmActive else 'Temp '}" \
+                f"{reading[0]['temp_c' if self.isCelcius else 'temp_f']}" \
+                f"{chr(223)}{'C' if self.isCelcius else 'F'}          "
             )
             LCD1602.write(0, 1, f"Humidity {reading[0]['humidity']}%    ")
     
@@ -118,7 +120,8 @@ class Lesson28:
     def readButton(self):
         for index, pin in enumerate(self.buttonPins):
             self.buttonStates[index][0] = self.pi.read(pin)
-            if self.buttonStates[index][0] == 1 and self.buttonStates[index][0] != self.buttonStates[index][1]:
+            if self.buttonStates[index][0] == 1 \
+               and self.buttonStates[index][0] != self.buttonStates[index][1]:
                 if index == 0:
                     self.isCelcius = not self.isCelcius
                 else:
@@ -127,10 +130,16 @@ class Lesson28:
         self.writeLCD()
         
     def checkTempThreshold(self):
+        print(GPIO.input(22), end = "\r")
         reading = [read for read in self.read if read["valid"] == True]
-        if not self.isProgramming \
+        shouldActivateAlarm = not self.isProgramming \
             and len(reading) > 0 \
-            and self.tempThreshold <= float(reading[0]["temp_c"]):
+            and self.tempThreshold <= float(reading[0]["temp_c"])
+        self.sirenAlarm(shouldActivateAlarm)
+            
+    def sirenAlarm(self, isActive):
+        self.isAlarmActive = isActive
+        if isActive:
             self.buzzer.start(50)
             for i in range(150, 2000):
                 self.buzzer.ChangeFrequency(i)
@@ -138,7 +147,6 @@ class Lesson28:
             for i in range(2000, 150, -1):
                 self.buzzer.ChangeFrequency(i)
                 sleep(.0001)
-            
         else:
             self.buzzer.stop()
         
