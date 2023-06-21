@@ -15,24 +15,18 @@ class Lesson29HW:
         # PIGPIO & RPi.GPIO
         self.pi = pi
         GPIO.setmode(GPIO.BCM)
-        
         # BUZZER
         self.buzzer = self.prepareBuzzer(buzzerPin)
-        
         # PIR
         self.pirPin = self.preparePIR(pirPin)
-        
         # ADC CHIP
         ADC0834.setup()
-        
         # TIMERS
         self.photoTimer = None
         self.pirTimer = None
         self.checkLightTimer = None
-        
         # FLAGS
         self.isAlarmActive = False
-        
         # DATA
         self.lightThreshold = lightThreshold
         self.photoValue = None
@@ -52,7 +46,7 @@ class Lesson29HW:
     def readPhotoResistor(self):
         self.photoValue = ADC0834.getResult()
     
-    def readPir(self):
+    def readPIR(self):
         self.pirValue = self.pi.read(self.pirPin)
         
     def checkLightThreshold(self):
@@ -62,7 +56,7 @@ class Lesson29HW:
     def sirenAlarm(self, isActive):
         self.isAlarmActive = isActive
         if isActive:
-            print("MOTION DETECTED", end = "\r")
+            print("MOTION DETECTED ", end = "\r")
             self.buzzer.start(50)
             for r in range(5):                    
                 for i in range(150, 2000):
@@ -73,13 +67,13 @@ class Lesson29HW:
                     sleep(.0001)
                 sleep(.1)
         else:
-            print("               ", end = "\r")
+            print(f"PHOR: {self.photoValue} PIR: {self.pirValue}  ", end = "\r")
             self.buzzer.stop()
             
     def start(self):
         self.photoTimer = RepeatTimer(.5, self.readPhotoResistor)
         self.photoTimer.start()
-        self.pirTimer = RepeatTimer(.5, self.readPir)
+        self.pirTimer = RepeatTimer(.5, self.readPIR)
         self.pirTimer.start()
         self.checkLightTimer = RepeatTimer(.25, self.checkLightThreshold)
         self.checkLightTimer.start()
