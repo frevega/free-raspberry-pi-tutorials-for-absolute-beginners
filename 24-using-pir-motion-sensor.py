@@ -1,13 +1,14 @@
-import RPi.GPIO as GPIO
+import pigpio
 from RepeatTimer import RepeatTimer
 
-GPIO.setmode(GPIO.BOARD)
+pi = pigpio.pi()
 pirPin = 12
-GPIO.setup(pirPin, GPIO.IN)
+pi.set_mode(pirPin, pigpio.INPUT)
+
 thread = None
 
 def readSensor():
-    print(f"{GPIO.input(pirPin)}      ", end = "\r")
+    print(f"{pi.read(pirPin)}      ", end = "\r")
 
 try:
     thread = RepeatTimer(.05, readSensor)
@@ -17,5 +18,5 @@ try:
         pass
 except KeyboardInterrupt:
     thread.cancel()
-    GPIO.cleanup()
+    pi.stop()
     print("\nSee ya later, RPi!\n")
