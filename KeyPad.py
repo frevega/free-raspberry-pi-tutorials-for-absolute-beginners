@@ -27,6 +27,7 @@ class KeyPad:
         self.buttonStates = [[[0, 1] for col in cols] for row in rows]
         self.readTimer = None
         self.pressedKeys = []
+        self.pressedKey = ""
         
     def prepareInputs(self, pin):
         self.pi.set_mode(pin, pigpio.INPUT)
@@ -39,22 +40,37 @@ class KeyPad:
                 self.buttonStates[i][j][0] = self.pi.read(colPin)
                 if self.buttonStates[i][j][0] \
                    and self.buttonStates[i][j][0] != self.buttonStates[i][j][1]:
-                    self.input(self.keys[i][j])
+                    self.pressedKey = self.keys[i][j]
+                    self.input()
                 self.buttonStates[i][j][1] = self.buttonStates[i][j][0]
             self.pi.write(rowPin, 0)
 
-    def input(self, letter):
-        if letter == self.enterKey:
-            print(" ".join(map(str, self.pressedKeys)))
+    def input(self):
+        if self.pressedKey == self.enterKey:
+            self.auxInputString = " ".join(map(str, self.pressedKeys))
+            print(self.auxInputString)
             self.pressedKeys.clear()
         else:
-            self.pressedKeys.append(letter)
+            self.pressedKeys.append(self.pressedKey)
             print(" ".join(map(str, ["*" for letter in self.pressedKeys])), end = "\r")
+
+    def readKeyPad(self):
+        if self.pressedKey == self.enterKey and len(self.auxInputString) != 0:
+            self.pressedKey = ""
+            
+            return self.auxInputString.replace(" ", "")
+        
+        return None
     
-    def start(self):
+    def startTimer(self):
         self.readTimer = RepeatTimer(.1, self.read)
         self.readTimer.start()
+
+    def stopTimer(self):
+        if self.readTimer != None:
+            self.readTimer.cancel()
+            self.readTimer = None
     
     def stop(self):
-        self.readTimer.cancel()
+        self.stopTimer()
         self.pi.stop()

@@ -4,7 +4,7 @@ from time import sleep
 if __name__ == "__main__":
     try:
         lesson = KeyPad()
-        lesson.start()
+        lesson.startTimer()
         
         while True:
             sleep(.1)
