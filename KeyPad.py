@@ -27,6 +27,7 @@ class KeyPad:
         self.buttonStates = [[[0, 1] for col in cols] for row in rows]
         self.readTimer = None
         self.pressedKeys = []
+        """ Keeps latest keystroke """
         self.pressedKey = ""
         
     def prepareInputs(self, pin):
@@ -41,11 +42,12 @@ class KeyPad:
                 if self.buttonStates[i][j][0] \
                    and self.buttonStates[i][j][0] != self.buttonStates[i][j][1]:
                     self.pressedKey = self.keys[i][j]
-                    self.input()
+                    self.check_input()
                 self.buttonStates[i][j][1] = self.buttonStates[i][j][0]
             self.pi.write(rowPin, 0)
-
-    def input(self):
+    
+    def check_input(self):
+        """ Check if mapped key was pressed in order to return string """
         if self.pressedKey == self.enterKey:
             self.auxInputString = " ".join(map(str, self.pressedKeys))
             print(self.auxInputString)
