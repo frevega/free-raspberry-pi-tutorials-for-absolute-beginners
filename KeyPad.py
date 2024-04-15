@@ -13,66 +13,72 @@ class KeyPad:
                 [7, 8, 9, "C"],
                 ["*", 0, "#", "D"]
             ],
-            enterKey = "D"
+            enter_key = "D",
+            masking_key = "_"
         ):
-        self.pi = pi
-        self.rows = rows
-        self.cols = cols
-        self.keys = keys
-        self.enterKey = enterKey
+        if len([masking_key for list in keys if masking_key in list]) > 0:
+            raise IOError(f"Masking key '{masking_key}' should not exist in keys list")
+        else:
+            self.pi = pi
+            self.rows = rows
+            self.cols = cols
+            self.keys = keys
+            self.enter_key = enter_key
+            self.masking_key = masking_key
+            
+            [self.pi.set_mode(pin, pigpio.OUTPUT) for pin in rows]
+            [self.prepare_inputs(pin) for pin in cols]
+            
+            self.button_states = [[[0, 1] for col in cols] for row in rows]
+            self.read_timer = None
+            self.pressed_keys = []
+            """ Keeps latest keystroke """
+            self.pressed_key = ""
         
-        [self.pi.set_mode(pin, pigpio.OUTPUT) for pin in rows]
-        [self.prepareInputs(pin) for pin in cols]
-        
-        self.buttonStates = [[[0, 1] for col in cols] for row in rows]
-        self.readTimer = None
-        self.pressedKeys = []
-        """ Keeps latest keystroke """
-        self.pressedKey = ""
-        
-    def prepareInputs(self, pin):
+    def prepare_inputs(self, pin):
         self.pi.set_mode(pin, pigpio.INPUT)
         self.pi.set_pull_up_down(pin, pigpio.PUD_DOWN)
         
     def read(self):
-        for i, rowPin in enumerate(self.rows):
-            self.pi.write(rowPin, 1)
-            for j, colPin in enumerate(self.cols):
-                self.buttonStates[i][j][0] = self.pi.read(colPin)
-                if self.buttonStates[i][j][0] \
-                   and self.buttonStates[i][j][0] != self.buttonStates[i][j][1]:
-                    self.pressedKey = self.keys[i][j]
+        for i, row_pin in enumerate(self.rows):
+            self.pi.write(row_pin, 1)
+            for j, col_pin in enumerate(self.cols):
+                self.button_states[i][j][0] = self.pi.read(col_pin)
+                if self.button_states[i][j][0] \
+                   and self.button_states[i][j][0] != self.button_states[i][j][1]:
+                    self.pressed_key = self.keys[i][j]
                     self.check_input()
-                self.buttonStates[i][j][1] = self.buttonStates[i][j][0]
-            self.pi.write(rowPin, 0)
+                self.button_states[i][j][1] = self.button_states[i][j][0]
+            self.pi.write(row_pin, 0)
     
     def check_input(self):
         """ Check if mapped key was pressed in order to return string """
-        if self.pressedKey == self.enterKey:
-            self.auxInputString = " ".join(map(str, self.pressedKeys))
-            print(self.auxInputString)
-            self.pressedKeys.clear()
+        if self.pressed_key == self.enter_key:
+            self.aux_input = " ".join(map(str, self.pressed_keys))
+            print(self.aux_input)
+            self.pressed_keys.clear()
         else:
-            self.pressedKeys.append(self.pressedKey)
-            print(" ".join(map(str, ["*" for letter in self.pressedKeys])), end = "\r")
+            self.pressed_keys.append(self.pressed_key)
+            print(" ".join(map(str, [self.masking_key for letter in self.pressed_keys])), end = "\r")
 
-    def readKeyPad(self):
-        if self.pressedKey == self.enterKey and len(self.auxInputString) != 0:
-            self.pressedKey = ""
-            
-            return self.auxInputString.replace(" ", "")
+    def read_key_pad(self):
+        if self.pressed_key == self.enter_key and len(self.aux_input) != 0:
+            self.pressed_key = ""
+            return self.aux_input.replace(" ", "")
+        elif len(self.pressed_keys) != 0:
+            return "".join(map(str, [self.masking_key for letter in self.pressed_keys]))
         
         return None
     
-    def startTimer(self):
-        self.readTimer = RepeatTimer(.1, self.read)
-        self.readTimer.start()
+    def start_timer(self):
+        self.read_timer = RepeatTimer(.1, self.read)
+        self.read_timer.start()
 
-    def stopTimer(self):
-        if self.readTimer != None:
-            self.readTimer.cancel()
-            self.readTimer = None
+    def stop_timer(self):
+        if self.read_timer != None:
+            self.read_timer.cancel()
+            self.read_timer = None
     
     def stop(self):
-        self.stopTimer()
+        self.stop_timer()
         self.pi.stop()
