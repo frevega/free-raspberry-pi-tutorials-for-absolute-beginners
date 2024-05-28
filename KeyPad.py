@@ -14,7 +14,8 @@ class KeyPad:
                 ["*", 0, "#", "D"]
             ],
             enter_key = "D",
-            masking_key = "_"
+            masking_key = "_",
+            is_debugging = False
         ):
         if len([masking_key for list in keys if masking_key in list]) > 0:
             raise IOError(f"Masking key '{masking_key}' should not exist in keys list")
@@ -34,6 +35,7 @@ class KeyPad:
             self.pressed_keys = []
             """ Keeps latest keystroke """
             self.pressed_key = ""
+            self.is_debugging = is_debugging
         
     def prepare_inputs(self, pin):
         self.pi.set_mode(pin, pigpio.INPUT)
@@ -55,11 +57,13 @@ class KeyPad:
         """ Check if mapped key was pressed in order to return string """
         if self.pressed_key == self.enter_key:
             self.aux_input = " ".join(map(str, self.pressed_keys))
-            print(self.aux_input)
+            if self.is_debugging:
+                print(self.aux_input)
             self.pressed_keys.clear()
         else:
             self.pressed_keys.append(self.pressed_key)
-            print(" ".join(map(str, [self.masking_key for letter in self.pressed_keys])), end = "\r")
+            if self.is_debugging:
+                print(" ".join(map(str, [self.masking_key for letter in self.pressed_keys])), end = "\r")
 
     def read_key_pad(self):
         if self.pressed_key == self.enter_key and len(self.aux_input) != 0:
