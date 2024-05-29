@@ -8,7 +8,7 @@ pi.set_mode(sensor_pin, pigpio.INPUT)
 if __name__ == "__main__":
     try:
         while True:
-            print(f"{pi.read(sensor_pin)}      ", end = "\r")
-            sleep(.2)
+            print(pi.read(sensor_pin))
+            sleep(.1)
     except KeyboardInterrupt:
         print("\nSee you later RPi!")
