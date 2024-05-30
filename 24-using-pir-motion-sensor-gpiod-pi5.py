@@ -15,4 +15,5 @@ try:
 except KeyboardInterrupt:
     timer.cancel()
     sensor_line.release()
+    chip.close()
     print("\nSee ya later, RPi!\n")
