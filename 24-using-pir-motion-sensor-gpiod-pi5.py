@@ -1,6 +1,5 @@
 import gpiod
 from RepeatTimer import RepeatTimer
-from time import sleep
 
 chip = gpiod.Chip("/dev/gpiochip4")
 sensor_line = chip.get_line(18)
