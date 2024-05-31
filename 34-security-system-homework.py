@@ -4,8 +4,10 @@
 
 import LCD1602 as lcd
 import pigpio
+import os
 from enum import Enum
 from KeyPad import KeyPad
+from pygame import mixer
 from RepeatTimer import RepeatTimer
 from threading import Event, Thread
 from time import sleep
@@ -15,13 +17,17 @@ SystemState = Enum("SystemState", ["ARM", "ARMED", "UNARM", "UNARMED", "PASSWORD
 PREVIOUS = 0
 CURRENT = 1
 PASSW_MAX_TRIES = 3
+MIN_PASSW_LENGTH = 4
+MAX_PASSW_LENGTH = 8
 SECURITY_CHECK_MAX_TRIES = 1
+ARMING_ALARM_OFFSET = 5
 
 class MySecuritySystem:
     def __init__(self):
         self.__user_input = None
         self.__upd_passw_counter = 0
         self.__lcd_text_to_write = [None, None]
+        self.__motion_sensor_thread = None
         self.__pi = pigpio.pi()
         self.__prepare_lcd()
         self.__prepare_keypad()
@@ -32,6 +38,7 @@ class MySecuritySystem:
         self.__previous_password = [False, None]
         self.__handle_state(SystemState.PASSWORD)
         self.__start_keypad_thread()
+        self.__prepare_alarm()
 
     def __prepare_lcd(self):
         lcd.init()
@@ -53,28 +60,48 @@ class MySecuritySystem:
     def __start_keypad_thread(self):
         self.__read_keypad_action_thread = Thread(target = self.__read_keypad_action, daemon = True)
         self.__read_keypad_action_thread.start()
+    
+    def __prepare_alarm(self):
+        mixer.init()
+        mixer.music.load("resources/burglar_alarm.mp3")
+        mixer.music.set_volume(0.3)
+    
+    def __start_alarm(self):
+        if not mixer.music.get_busy():
+            mixer.music.play(5)
+
+    def __stop_alarm(self):
+        if mixer.music.get_busy():
+            mixer.music.stop()
 
     def __start_motion_sensor_thread(self):
-        self.__stop_motion_sensor_event.clear()
-        motion_sensor_thread = Thread(target = self.__read_motion_sensor, args = (self.__stop_motion_sensor_event,), daemon = True)
-        motion_sensor_thread.start()
+         if self.__motion_sensor_thread is None:
+            self.__stop_motion_sensor_event.clear()
+            self.__motion_sensor_thread = Thread(target = self.__read_motion_sensor, args = (self.__stop_motion_sensor_event,), daemon = True)
+            if not self.__motion_sensor_thread.is_alive():
+                self.__motion_sensor_thread.start()
 
     def __read_motion_sensor(self, event):
         while True:
-            print(f"{self.__pi.read(self.__motion_sensor_pin)}", end = "\n")
-            sleep(.1)
+            print(self.__pi.read(self.__motion_sensor_pin))
             if event.is_set():
+                self.__stop_alarm()
+                self.__motion_sensor_thread = None
                 break
+            else:
+                if self.__pi.read(self.__motion_sensor_pin) == 1:
+                    self.__start_alarm()
+                sleep(.1)
 
     def __clear_lcd_row(self, col = 0, row = 1):
         lcd.write(col, row, "".join([" " for space in range(16)]))
 
-    def __write_lcd_text(self, text):
+    def __write_lcd_text(self, text, col = 0, row = 0):
         self.__lcd_text_to_write[0] = self.__lcd_text_to_write[1]
         self.__lcd_text_to_write[1] = text
 
         if self.__lcd_text_to_write[0] != self.__lcd_text_to_write[1]:
-            lcd.write(0, 0, self.__lcd_text_to_write[1])
+            lcd.write(col, row, self.__lcd_text_to_write[1])
 
     def __security_check(self, text, state):
         self.__write_lcd_text(text)
@@ -85,17 +112,14 @@ class MySecuritySystem:
             if "_" not in self.__user_input:
                 if self.__current_password[1] == self.__user_input:
                     self.__upd_passw_counter = 0
-                    self.__handle_state(state)
+                    if state == SystemState.ARMED:
+                        self.__armed_alarm_delay()
+                    else:
+                        self.__handle_state(state)
                 else:
                     lcd.write(0, 1, "NO MATCH        ")
                     sleep(1)
-                    self.__upd_passw_counter += 1
-                    if self.__upd_passw_counter == SECURITY_CHECK_MAX_TRIES:
-                        lcd.write(0, 1, "SYSTEM RESET    ")
-                        sleep(1)
-                        self.__upd_passw_counter = 0
-                        self.__handle_state(self.__system_states[PREVIOUS])
-                    self.__clear_lcd_row()
+                    self.__update_password_counter(False)
             else:
                 lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
 
@@ -155,7 +179,10 @@ class MySecuritySystem:
                 self.__handle_state(self.__system_states[PREVIOUS])
 
     def __armed_action(self):
-        self.__clear_lcd_row()
+        if mixer.music.get_busy():
+            self.__write_lcd_text("MOTION DETECTED", row = 1)
+        else:  
+            self.__clear_lcd_row()
         self.__start_motion_sensor_thread()
         self.__write_lcd_text("ARMED           ")
 
@@ -187,37 +214,66 @@ class MySecuritySystem:
                 self.__clear_lcd_row()
             elif self.__current_password[1] == None if not is_passw_set else self.__user_input:
                 if "_" not in self.__user_input:
-                    lcd.write(0, 1, self.__user_input)
-                    sleep(1)
-                    if not is_passw_set:
-                        self.__current_password = [is_passw_set, self.__user_input]
-                        self.__clear_lcd_row()
-                    elif self.__current_password[1] == self.__user_input:
-                        self.__current_password[0] = is_passw_set
-                        self.__write_lcd_text("PASSWORD SET    ")
-                        lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
-                        sleep(1)
-                        self.__upd_passw_counter = 0
-                        if self.__previous_password[0]:
-                            self.__previous_password = [False, None]
-                        self.__handle_state(SystemState.ARMED)
+                    if not MIN_PASSW_LENGTH <= len(self.__user_input) <= MAX_PASSW_LENGTH and not is_passw_set:
+                        self.__write_lcd_text("PASSWORD LENGTH:")
+                        self.__write_lcd_text(f"{MIN_PASSW_LENGTH} TO {MAX_PASSW_LENGTH} CHARS", row = 1)
+                        sleep(2)
+                        self.__clear_lcd_row(row = 1)
+                        self.__update_password_counter()
                     else:
-                        lcd.write(0, 1, "NO MATCH        ")
+                        lcd.write(0, 1, self.__user_input)
                         sleep(1)
-                        self.__upd_passw_counter += 1
-                        if self.__upd_passw_counter == PASSW_MAX_TRIES:
-                            lcd.write(0, 1, "SYSTEM RESET    ")
+                        if not is_passw_set:
+                            self.__upd_passw_counter = 0
+                            self.__current_password = [is_passw_set, self.__user_input]
+                            self.__clear_lcd_row()
+                        elif self.__current_password[1] == self.__user_input:
+                            self.__current_password[0] = is_passw_set
+                            self.__write_lcd_text("PASSWORD SET    ")
+                            lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
                             sleep(1)
                             self.__upd_passw_counter = 0
                             if self.__previous_password[0]:
-                                self.__current_password = self.__previous_password
                                 self.__previous_password = [False, None]
-                                self.__handle_state(self.__system_states[PREVIOUS])
-                            else:
-                                self.__current_password = [False, None]
-                        self.__clear_lcd_row()
+                            self.__armed_alarm_delay()
+                        else:
+                            lcd.write(0, 1, "NO MATCH        ")
+                            sleep(1)
+                            self.__update_password_counter()
                 else:
                     lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
+
+    def __update_password_counter(self, is_new_passw = True):
+        self.__upd_passw_counter += 1
+        if self.__upd_passw_counter == PASSW_MAX_TRIES if is_new_passw else SECURITY_CHECK_MAX_TRIES:
+            lcd.write(0, 1, "SYSTEM RESET    ")
+            sleep(1)
+            self.__upd_passw_counter = 0
+            if is_new_passw:
+                if self.__previous_password[0]:
+                    self.__current_password = self.__previous_password
+                    self.__previous_password = [False, None]
+                    self.__handle_state(self.__system_states[PREVIOUS])
+                else:
+                    self.__current_password = [False, None]
+            else:
+                self.__handle_state(self.__system_states[PREVIOUS])
+        self.__clear_lcd_row()
+
+    def __armed_alarm_delay(self):
+        if self.__system_states[0] != SystemState.ARMED:
+            self.__clear_lcd_row()
+            counter = 0
+            while counter <= ARMING_ALARM_OFFSET:
+                screen_counter = ARMING_ALARM_OFFSET - counter
+                self.__write_lcd_text("ARMING SYSTEM")
+                if screen_counter >= 1:
+                    self.__write_lcd_text(f"IN {screen_counter} {'SECONDS   ' if screen_counter > 1 else 'SECOND   '}", row = 1)
+                else:
+                    self.__write_lcd_text("NOW        ", row = 1)
+                counter += 1
+                sleep(1)
+            self.__handle_state(SystemState.ARMED)
 
     def __update_password_action(self):
         self.__security_check("UPDATE: PASSWORD", SystemState.PASSWORD)
@@ -225,9 +281,10 @@ class MySecuritySystem:
     def stop(self):
         sleep(.2)
         lcd.clear()
+        self.__stop_alarm()
         self.__prepare_lcd_led(0, 0)
-        self.__read_keypad_action_thread = None
         self.__stop_motion_sensor_event.set()
+        self.__read_keypad_action_thread = None
         self.__keypad.stop_timer()
         self.__pi.stop()
 
