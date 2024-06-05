@@ -28,6 +28,7 @@ class MySecuritySystem:
         self.__upd_passw_counter = 0
         self.__lcd_text_to_write = [None, None]
         self.__motion_sensor_thread = None
+        self.__file_path = "resources/.passw"
         self.__pi = pigpio.pi()
         self.__prepare_lcd()
         self.__prepare_keypad()
@@ -36,9 +37,9 @@ class MySecuritySystem:
         self.__system_states = [None, SystemState.PASSWORD]
         self.__current_password = [False, None]
         self.__previous_password = [False, None]
+        self.__prepare_alarm()
         self.__handle_state(SystemState.PASSWORD)
         self.__start_keypad_thread()
-        self.__prepare_alarm()
 
     def __prepare_lcd(self):
         lcd.init()
@@ -140,23 +141,24 @@ class MySecuritySystem:
         elif self.__system_states[PREVIOUS] != self.__system_states[CURRENT]:
             self.__system_states[PREVIOUS] = self.__system_states[CURRENT]
         self.__system_states[CURRENT] = state
-        self.__execute_keypad_action()
+        self.__execute_state_action()
 
     def __read_keypad_action(self):
         while True:
             self.__user_input = self.__keypad.read_key_pad()
+            states_check = [SystemState.ARMED, SystemState.UNARMED]
             match self.__user_input:
                 case "A":
-                    self.__handle_state(SystemState.ARM)
+                    self.__handle_state(SystemState.ARM if self.__system_states[CURRENT] in states_check else self.__system_states[PREVIOUS])
                 case "B":
-                    self.__handle_state(SystemState.UNARM)
+                    self.__handle_state(SystemState.UNARM if self.__system_states[CURRENT] in states_check else self.__system_states[PREVIOUS])
                 case "C":
-                    self.__handle_state(SystemState.UPDATE_PASSWORD)
+                    self.__handle_state(SystemState.UPDATE_PASSWORD if self.__system_states[CURRENT] in states_check else self.__system_states[PREVIOUS])
                 case _:
-                    self.__execute_keypad_action()
+                    self.__execute_state_action()
             sleep(.2)
 
-    def __execute_keypad_action(self):
+    def __execute_state_action(self):
         match self.__current_password[0], self.__system_states[CURRENT]:
             case True, SystemState.ARM:
                 self.__arm_action()
@@ -199,49 +201,63 @@ class MySecuritySystem:
         self.__write_lcd_text("UNARMED         ")
     
     def __set_password_action(self):
-        match self.__current_password:
-            case False, None:
-                text = "ENTER PASSWORD  "
-            case False, _:
-                text = "CHECK PASSWORD  "
-                
-        self.__write_lcd_text(text)
-        
-        if self.__user_input != None:
-            is_passw_set = self.__current_password[1] != None
-            if self.__user_input in ["A", "B", "C"]:
-                self.__user_input = None
-                self.__clear_lcd_row()
-            elif self.__current_password[1] == None if not is_passw_set else self.__user_input:
-                if "_" not in self.__user_input:
-                    if not MIN_PASSW_LENGTH <= len(self.__user_input) <= MAX_PASSW_LENGTH and not is_passw_set:
-                        self.__write_lcd_text("PASSWORD LENGTH:")
-                        self.__write_lcd_text(f"{MIN_PASSW_LENGTH} TO {MAX_PASSW_LENGTH} CHARS", row = 1)
-                        sleep(2)
-                        self.__clear_lcd_row(row = 1)
-                        self.__update_password_counter()
-                    else:
-                        lcd.write(0, 1, self.__user_input)
-                        sleep(1)
-                        if not is_passw_set:
-                            self.__upd_passw_counter = 0
-                            self.__current_password = [is_passw_set, self.__user_input]
-                            self.__clear_lcd_row()
-                        elif self.__current_password[1] == self.__user_input:
-                            self.__current_password[0] = is_passw_set
-                            self.__write_lcd_text("PASSWORD SET    ")
-                            lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
-                            sleep(1)
-                            self.__upd_passw_counter = 0
-                            if self.__previous_password[0]:
-                                self.__previous_password = [False, None]
-                            self.__armed_alarm_delay()
-                        else:
-                            lcd.write(0, 1, "NO MATCH        ")
-                            sleep(1)
+        if self.__system_states[PREVIOUS] == None and self.__check_password_file():
+            self.__armed_alarm_delay()
+        else:
+            match self.__current_password:
+                case False, None:
+                    text = "ENTER PASSWORD  "
+                case False, _:
+                    text = "CHECK PASSWORD  "
+                    
+            self.__write_lcd_text(text)
+            
+            if self.__user_input != None:
+                is_passw_set = self.__current_password[1] != None
+                if self.__user_input in ["A", "B", "C"]:
+                    # password, none    //  none, password                                              (1) SET PASSWORD WHEN FILE DOES NOT EXIST: DO NOTHING?
+                    # password, unarmed //  unarmed, update password    //  update password, unarmed    (2) PREVIOUS & CURRENT STATE IN: UNARMED, ARMED, UPDATE_PASSWORD
+                    # password, armed   //  armed, update password      //  update password, armed
+                    states_check = [SystemState.UNARMED, SystemState.ARMED, SystemState.UPDATE_PASSWORD]
+                    if self.__system_states[PREVIOUS] in states_check or self.__system_states[CURRENT] in states_check: # (2)
+                        self.__system_states = [SystemState.PASSWORD, SystemState.ARMED if SystemState.ARMED in self.__system_states else SystemState.UNARMED]
+                        self.__current_password = self.__previous_password
+                        self.__previous_password = [False, None]
+                        self.__handle_state(self.__system_states[CURRENT])
+                    else: # (1)
+                        self.__user_input = None
+                        self.__clear_lcd_row()
+                elif self.__current_password[1] == None if not is_passw_set else self.__user_input:
+                    if "_" not in self.__user_input:
+                        if not MIN_PASSW_LENGTH <= len(self.__user_input) <= MAX_PASSW_LENGTH and not is_passw_set:
+                            self.__write_lcd_text("PASSWORD LENGTH:")
+                            self.__write_lcd_text(f"{MIN_PASSW_LENGTH} TO {MAX_PASSW_LENGTH} CHARS", row = 1)
+                            sleep(2)
+                            self.__clear_lcd_row(row = 1)
                             self.__update_password_counter()
-                else:
-                    lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
+                        else:
+                            lcd.write(0, 1, self.__user_input)
+                            sleep(1)
+                            if not is_passw_set:
+                                self.__upd_passw_counter = 0
+                                self.__current_password = [is_passw_set, self.__user_input]
+                                self.__clear_lcd_row()
+                            elif self.__current_password[1] == self.__user_input:
+                                self.__current_password[0] = is_passw_set
+                                self.__write_password_file(self.__user_input)
+                                self.__write_lcd_text("PASSWORD SET    ")
+                                lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
+                                sleep(1)
+                                self.__upd_passw_counter = 0
+                                if self.__previous_password[0]:
+                                    self.__previous_password = [False, None]
+                                self.__armed_alarm_delay()
+                            else:
+                                lcd.write(0, 1, "NO MATCH        ")
+                                sleep(1)
+                                self.__update_password_counter()
+                    else:
+                        lcd.write(0, 1, "".join(map(str, ["*" for letter in self.__user_input])))
 
     def __update_password_counter(self, is_new_passw = True):
         self.__upd_passw_counter += 1
@@ -277,7 +293,20 @@ class MySecuritySystem:
 
     def __update_password_action(self):
         self.__security_check("UPDATE: PASSWORD", SystemState.PASSWORD)
-    
+
+    def __check_password_file(self):
+        try:
+            with open(self.__file_path) as file:
+                self.__current_password = [True, file.read()]
+                
+                return True
+        except FileNotFoundError:
+            return False
+
+    def __write_password_file(self, password):
+        with open(self.__file_path, "w") as file:
+            file.write(password)
+
     def stop(self):
         sleep(.2)
         lcd.clear()
