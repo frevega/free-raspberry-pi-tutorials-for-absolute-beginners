@@ -28,7 +28,7 @@ class MySecuritySystem:
         self.__upd_passw_counter = 0
         self.__lcd_text_to_write = [None, None]
         self.__motion_sensor_thread = None
-        self.__file_path = "resources/.passw"
+        self.__file_path = f"{os.path.expanduser(f'~{os.getlogin()}')}/Documents/Projects/Raspberry Pi/free-raspberry-pi-tutorials-for-absolute-beginners/resources/.passw"
         self.__pi = pigpio.pi()
         self.__prepare_lcd()
         self.__prepare_keypad()
@@ -64,7 +64,8 @@ class MySecuritySystem:
     
     def __prepare_alarm(self):
         mixer.init()
-        mixer.music.load("resources/burglar_alarm.mp3")
+        # mixer.music.load("resources/burglar_alarm.mp3")
+        mixer.music.load(f"{os.path.expanduser(f'~{os.getlogin()}')}/Documents/Projects/Raspberry Pi/free-raspberry-pi-tutorials-for-absolute-beginners/resources/burglar_alarm.mp3")
         mixer.music.set_volume(0.3)
     
     def __start_alarm(self):
